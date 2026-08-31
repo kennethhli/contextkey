@@ -1,0 +1,7 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>ContextKey.Core</RootNamespace>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,26 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>ContextKey.Infrastructure</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ContextKey.Core\ContextKey.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SharpHook" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="sqlite-vec" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" />
+  </ItemGroup>
+
+  <!-- flaui is netfx, windows only -->
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <PackageReference Include="FlaUI.UIA3">
+      <NoWarn>NU1701</NoWarn>
+    </PackageReference>
+  </ItemGroup>
+
+</Project>
