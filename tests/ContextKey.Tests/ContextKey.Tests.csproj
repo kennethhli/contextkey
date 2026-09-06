@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\ContextKey.Core\ContextKey.Core.csproj" />
+    <ProjectReference Include="..\..\src\ContextKey.Infrastructure\ContextKey.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -6,6 +6,7 @@ public readonly record struct Keystroke(
     bool IsBackspace,
     bool IsEscape,
     bool IsEnter,
+    bool IsTab,
     bool Alt,
     bool Control,
     bool Shift,

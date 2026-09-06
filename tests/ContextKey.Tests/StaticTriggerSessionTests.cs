@@ -1,0 +1,132 @@
+using ContextKey.Core.Engines;
+using ContextKey.Core.Models;
+
+namespace ContextKey.Tests;
+
+public sealed class StaticTriggerSessionTests
+{
+    private static StaticTriggerSession CreateSession()
+    {
+        var engine = new StaticExpansionEngine();
+        engine.Load(
+        [
+            new Snippet { Trigger = "email", Expansion = "my.email@domain.com" },
+            new Snippet { Trigger = "br", Expansion = "Best regards,\nAlex" }
+        ]);
+        return new StaticTriggerSession(engine);
+    }
+
+    [Fact]
+    public void EqualsEmailThenSpace_Expands()
+    {
+        var session = CreateSession();
+        Type(session, "=email");
+
+        var result = session.Handle(Space());
+
+        Assert.True(result.ShouldExpand);
+        Assert.True(result.Handled);
+        Assert.Equal("my.email@domain.com", result.Expansion);
+        Assert.Equal(6, result.EraseCount);
+    }
+
+    [Fact]
+    public void EqualsBrThenEnter_Expands()
+    {
+        var session = CreateSession();
+        Type(session, "=br");
+
+        var result = session.Handle(Enter());
+
+        Assert.True(result.ShouldExpand);
+        Assert.Equal("Best regards,\nAlex", result.Expansion);
+        Assert.Equal(3, result.EraseCount);
+    }
+
+    [Fact]
+    public void UnknownTrigger_DoesNotExpand()
+    {
+        var session = CreateSession();
+        Type(session, "=nope");
+
+        var result = session.Handle(Space());
+
+        Assert.False(result.ShouldExpand);
+        Assert.False(result.Handled);
+    }
+
+    [Fact]
+    public void Backspace_RemovesLastChar()
+    {
+        var session = CreateSession();
+        Type(session, "=emx");
+        session.Handle(Backspace());
+        Type(session, "ail");
+
+        var result = session.Handle(Space());
+
+        Assert.Equal("my.email@domain.com", result.Expansion);
+    }
+
+    [Fact]
+    public void Escape_ClearsBuffer()
+    {
+        var session = CreateSession();
+        Type(session, "=email");
+        session.Handle(Escape());
+
+        var result = session.Handle(Space());
+
+        Assert.False(result.ShouldExpand);
+        Assert.Equal(string.Empty, session.Buffer);
+    }
+
+    [Fact]
+    public void TypingWithoutPrefix_DoesNothing()
+    {
+        var session = CreateSession();
+        Type(session, "email");
+
+        var result = session.Handle(Space());
+
+        Assert.False(result.ShouldExpand);
+    }
+
+    [Fact]
+    public void NewEquals_RestartsTrigger()
+    {
+        var session = CreateSession();
+        Type(session, "=em");
+        Type(session, "=email");
+
+        var result = session.Handle(Tab());
+
+        Assert.Equal("my.email@domain.com", result.Expansion);
+    }
+
+    private static void Type(StaticTriggerSession session, string text)
+    {
+        foreach (var ch in text)
+        {
+            session.Handle(CharKey(ch));
+        }
+    }
+
+    private static Keystroke CharKey(char ch) =>
+        new(ch, ch.ToString(), false, false, false, false, false, false, false, false);
+
+    private static Keystroke Space() =>
+        new(' ', "Space", false, false, false, false, false, false, false, false);
+
+    private static Keystroke Enter() =>
+        new(null, "Enter", false, false, true, false, false, false, false, false);
+
+    private static Keystroke Tab() =>
+        new(null, "Tab", false, false, false, true, false, false, false, false);
+
+    private static Keystroke Backspace() =>
+        new(null, "Backspace", true, false, false, false, false, false, false, false);
+
+    private static Keystroke Escape() =>
+        new(null, "Escape", false, true, false, false, false, false, false, false);
+}
