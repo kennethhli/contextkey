@@ -104,6 +104,67 @@ public sealed class StaticTriggerSessionTests
         Assert.Equal("my.email@domain.com", result.Expansion);
     }
 
+    [Fact]
+    public void SemicolonEmailThenSpace_RequestsScrape()
+    {
+        var session = CreateSession();
+        Type(session, ";email");
+
+        var result = session.Handle(Space());
+
+        Assert.True(result.ShouldScrape);
+        Assert.True(result.Handled);
+        Assert.Equal("email", result.DynamicKey);
+        Assert.Equal(6, result.EraseCount);
+        Assert.False(result.ShouldExpand);
+    }
+
+    [Fact]
+    public void SemicolonDate_IsKnown()
+    {
+        var session = CreateSession();
+        Type(session, ";date");
+
+        var result = session.Handle(Enter());
+
+        Assert.Equal("date", result.DynamicKey);
+        Assert.True(result.ShouldScrape);
+    }
+
+    [Fact]
+    public void DoubleSemicolon_DoesNotScrape()
+    {
+        var session = CreateSession();
+        Type(session, ";;");
+
+        var result = session.Handle(Space());
+
+        Assert.False(result.ShouldScrape);
+        Assert.False(result.Handled);
+    }
+
+    [Fact]
+    public void OverlayPrefixPlusQuery_DoesNotScrape()
+    {
+        var session = CreateSession();
+        Type(session, ";;email");
+
+        var result = session.Handle(Space());
+
+        Assert.False(result.ShouldScrape);
+    }
+
+    [Fact]
+    public void SemicolonUnknown_DoesNotScrape()
+    {
+        var session = CreateSession();
+        Type(session, ";phone");
+
+        var result = session.Handle(Space());
+
+        Assert.False(result.ShouldScrape);
+    }
+
     private static void Type(StaticTriggerSession session, string text)
     {
         foreach (var ch in text)
