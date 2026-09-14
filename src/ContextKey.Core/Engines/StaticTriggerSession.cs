@@ -7,12 +7,15 @@ public readonly record struct StaticTriggerResult(
     bool Handled,
     string? Expansion,
     int EraseCount,
-    string? DynamicKey = null)
+    string? DynamicKey = null,
+    bool OpenOverlay = false,
+    string OverlayQuery = "")
 {
     public static StaticTriggerResult Ignored { get; } = new(false, null, 0);
 
     public bool ShouldExpand => Expansion is not null;
     public bool ShouldScrape => DynamicKey is not null;
+    public bool ShouldOpenOverlay => OpenOverlay;
 }
 
 // =snippet or ;email / ;date, then space/enter/tab
@@ -99,10 +102,12 @@ public sealed class StaticTriggerSession
         var typed = _buffer.ToString();
         _buffer.Clear();
 
-        // ;; is the overlay later; don't treat it as a scrape
         if (typed.StartsWith(AppConfig.OverlayPrefix, StringComparison.Ordinal))
         {
-            return StaticTriggerResult.Ignored;
+            var query = typed.Length > AppConfig.OverlayPrefix.Length
+                ? typed[AppConfig.OverlayPrefix.Length..]
+                : string.Empty;
+            return new StaticTriggerResult(true, null, typed.Length, OpenOverlay: true, OverlayQuery: query);
         }
 
         if (typed.Length > 1 && typed[0] == AppConfig.DynamicPrefix)

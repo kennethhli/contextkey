@@ -132,7 +132,7 @@ public sealed class StaticTriggerSessionTests
     }
 
     [Fact]
-    public void DoubleSemicolon_DoesNotScrape()
+    public void DoubleSemicolon_OpensOverlay()
     {
         var session = CreateSession();
         Type(session, ";;");
@@ -140,11 +140,14 @@ public sealed class StaticTriggerSessionTests
         var result = session.Handle(Space());
 
         Assert.False(result.ShouldScrape);
-        Assert.False(result.Handled);
+        Assert.True(result.ShouldOpenOverlay);
+        Assert.True(result.Handled);
+        Assert.Equal(string.Empty, result.OverlayQuery);
+        Assert.Equal(2, result.EraseCount);
     }
 
     [Fact]
-    public void OverlayPrefixPlusQuery_DoesNotScrape()
+    public void OverlayPrefixPlusQuery_OpensOverlay()
     {
         var session = CreateSession();
         Type(session, ";;email");
@@ -152,6 +155,9 @@ public sealed class StaticTriggerSessionTests
         var result = session.Handle(Space());
 
         Assert.False(result.ShouldScrape);
+        Assert.True(result.ShouldOpenOverlay);
+        Assert.Equal("email", result.OverlayQuery);
+        Assert.Equal(7, result.EraseCount);
     }
 
     [Fact]

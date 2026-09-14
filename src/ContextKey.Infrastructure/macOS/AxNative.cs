@@ -21,18 +21,39 @@ internal static class AxNative
     public const int CfNumberIntType = 9;
     public const uint WindowOnScreenOnly = 1;
     public const uint WindowExcludeDesktop = 16;
+    public const uint AxValueCgRectType = 3;
+    public const uint AxValueCfRangeType = 4;
 
     [DllImport(ApplicationServices)]
     public static extern IntPtr AXUIElementCreateApplication(int pid);
 
     [DllImport(ApplicationServices)]
+    public static extern IntPtr AXUIElementCreateSystemWide();
+
+    [DllImport(ApplicationServices)]
     public static extern int AXUIElementCopyAttributeValue(IntPtr element, IntPtr attribute, out IntPtr value);
+
+    [DllImport(ApplicationServices)]
+    public static extern int AXUIElementCopyParameterizedAttributeValue(
+        IntPtr element,
+        IntPtr parameterizedAttribute,
+        IntPtr parameter,
+        out IntPtr value);
+
+    [DllImport(ApplicationServices)]
+    public static extern byte AXValueGetValue(IntPtr value, uint type, IntPtr buffer);
 
     [DllImport(ApplicationServices)]
     public static extern byte AXIsProcessTrusted();
 
     [DllImport(CoreGraphics)]
     public static extern IntPtr CGWindowListCopyWindowInfo(uint option, uint relativeToWindow);
+
+    [DllImport(CoreGraphics)]
+    public static extern uint CGMainDisplayID();
+
+    [DllImport(CoreGraphics)]
+    public static extern CgRect CGDisplayBounds(uint display);
 
     [DllImport(CoreFoundation)]
     public static extern IntPtr CFStringCreateWithCString(IntPtr alloc, string value, uint encoding);
@@ -69,6 +90,9 @@ internal static class AxNative
     public static readonly IntPtr AxValue = CfString("AXValue");
     public static readonly IntPtr AxTitle = CfString("AXTitle");
     public static readonly IntPtr AxDescription = CfString("AXDescription");
+    public static readonly IntPtr AxFocusedUiElement = CfString("AXFocusedUIElement");
+    public static readonly IntPtr AxSelectedTextRange = CfString("AXSelectedTextRange");
+    public static readonly IntPtr AxBoundsForRange = CfString("AXBoundsForRange");
     public static readonly IntPtr CgOwnerPid = CfString("kCGWindowOwnerPID");
     public static readonly IntPtr CgOwnerName = CfString("kCGWindowOwnerName");
     public static readonly IntPtr CgWindowName = CfString("kCGWindowName");
@@ -111,4 +135,20 @@ internal static class AxNative
             CFRelease(cf);
         }
     }
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct CgRect
+{
+    public double X;
+    public double Y;
+    public double Width;
+    public double Height;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct CfRange
+{
+    public nint Location;
+    public nint Length;
 }

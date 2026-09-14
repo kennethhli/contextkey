@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
 using ContextKey.Core.Interfaces;
@@ -61,7 +62,95 @@ public sealed class MacWindowScraper : IWindowScraper
     {
         x = 0;
         y = 0;
-        return false;
+        if (!OperatingSystem.IsMacOS() || AxNative.AXIsProcessTrusted() == 0)
+        {
+            return false;
+        }
+
+        var systemWide = AxNative.AXUIElementCreateSystemWide();
+        if (systemWide == IntPtr.Zero)
+        {
+            return false;
+        }
+
+        try
+        {
+            if (AxNative.AXUIElementCopyAttributeValue(systemWide, AxNative.AxFocusedUiElement, out var focused) != AxNative.AxSuccess
+                || focused == IntPtr.Zero)
+            {
+                return false;
+            }
+
+            try
+            {
+                if (AxNative.AXUIElementCopyAttributeValue(focused, AxNative.AxSelectedTextRange, out var rangeValue) != AxNative.AxSuccess
+                    || rangeValue == IntPtr.Zero)
+                {
+                    return false;
+                }
+
+                try
+                {
+                    if (AxNative.AXUIElementCopyParameterizedAttributeValue(
+                            focused, AxNative.AxBoundsForRange, rangeValue, out var boundsValue) != AxNative.AxSuccess
+                        || boundsValue == IntPtr.Zero)
+                    {
+                        return false;
+                    }
+
+                    try
+                    {
+                        if (!TryReadRect(boundsValue, out var rect))
+                        {
+                            return false;
+                        }
+
+                        // AX is quartz coords (origin bottom-left)
+                        var display = AxNative.CGDisplayBounds(AxNative.CGMainDisplayID());
+                        x = (int)Math.Round(rect.X);
+                        y = (int)Math.Round(display.Height - rect.Y);
+                        return true;
+                    }
+                    finally
+                    {
+                        AxNative.Release(boundsValue);
+                    }
+                }
+                finally
+                {
+                    AxNative.Release(rangeValue);
+                }
+            }
+            finally
+            {
+                AxNative.Release(focused);
+            }
+        }
+        finally
+        {
+            AxNative.Release(systemWide);
+        }
+    }
+
+    private static bool TryReadRect(IntPtr axValue, out CgRect rect)
+    {
+        var size = Marshal.SizeOf<CgRect>();
+        var buffer = Marshal.AllocHGlobal(size);
+        try
+        {
+            if (AxNative.AXValueGetValue(axValue, AxNative.AxValueCgRectType, buffer) == 0)
+            {
+                rect = default;
+                return false;
+            }
+
+            rect = Marshal.PtrToStructure<CgRect>(buffer);
+            return true;
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(buffer);
+        }
     }
 
     private bool IsFresh() =>
