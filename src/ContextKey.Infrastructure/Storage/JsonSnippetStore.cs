@@ -56,6 +56,12 @@ public sealed class JsonSnippetStore : ISnippetStore
     private static List<Snippet> Seed() =>
     [
         new Snippet { Trigger = "email", Expansion = "my.email@domain.com", Description = "work email" },
-        new Snippet { Trigger = "br", Expansion = "Best regards,\nAlex", Description = "sign-off" }
+        new Snippet { Trigger = "br", Expansion = "Best regards,\nAlex", Description = "sign-off" },
+        new Snippet
+        {
+            Trigger = "ret",
+            Expansion = "We can reverse the charge and restore the original payment.",
+            Description = "returns policy"
+        }
     ];
 }

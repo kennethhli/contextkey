@@ -1,8 +1,9 @@
+using ContextKey.Core.Interfaces;
 using ContextKey.Core.Models;
 
 namespace ContextKey.Core.Engines;
 
-public sealed class KeywordSearchEngine
+public sealed class KeywordSearchEngine : ISearchEngine
 {
     public const int DefaultLimit = 8;
 

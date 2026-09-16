@@ -16,6 +16,10 @@
     <PackageReference Include="Microsoft.ML.OnnxRuntime" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="Models\vocab.txt" />
+  </ItemGroup>
+
   <!-- flaui is netfx, windows only -->
   <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
     <PackageReference Include="FlaUI.UIA3">

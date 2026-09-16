@@ -1,5 +1,5 @@
 using System.Collections.ObjectModel;
-using ContextKey.Core.Engines;
+using ContextKey.Core.Interfaces;
 using ContextKey.Core.Models;
 using ReactiveUI;
 
@@ -7,14 +7,14 @@ namespace ContextKey.UI.ViewModels;
 
 public sealed class FloatingOverlayViewModel : ReactiveObject
 {
-    private readonly KeywordSearchEngine _search;
+    private readonly ISearchEngine _search;
     private readonly IReadOnlyList<Snippet> _snippets;
     private IReadOnlyList<ScrapedWindow> _windows;
     private string _query;
     private SearchResult? _selected;
 
     public FloatingOverlayViewModel(
-        KeywordSearchEngine search,
+        ISearchEngine search,
         IReadOnlyList<Snippet> snippets,
         IReadOnlyList<ScrapedWindow> windows,
         string query)

@@ -3,6 +3,7 @@ using Avalonia.Threading;
 using ContextKey.Core.Engines;
 using ContextKey.Core.Interfaces;
 using ContextKey.Core.Models;
+using ContextKey.Infrastructure.Ai;
 using ContextKey.Infrastructure.Input;
 using ContextKey.Infrastructure.macOS;
 using ContextKey.Infrastructure.Storage;
@@ -19,7 +20,8 @@ internal sealed class ExpansionHost : IDisposable
     private readonly ITextInjector _injector;
     private readonly IWindowScraper _scraper;
     private readonly RegexContextEngine _regex;
-    private readonly KeywordSearchEngine _search;
+    private readonly ISearchEngine _search;
+    private readonly IDisposable? _embedder;
     private readonly CancellationTokenSource _lifetime = new();
     private FloatingOverlayView? _overlay;
     private bool _overlayOpen;
@@ -27,11 +29,12 @@ internal sealed class ExpansionHost : IDisposable
     public ExpansionHost(
         StaticExpansionEngine engine,
         RegexContextEngine regex,
-        KeywordSearchEngine search,
+        ISearchEngine search,
         ISnippetStore store,
         IKeyboardHookService hook,
         ITextInjector injector,
-        IWindowScraper scraper)
+        IWindowScraper scraper,
+        IDisposable? embedder = null)
     {
         ArgumentNullException.ThrowIfNull(engine);
         ArgumentNullException.ThrowIfNull(regex);
@@ -50,6 +53,7 @@ internal sealed class ExpansionHost : IDisposable
         _scraper = scraper;
         _regex = regex;
         _search = search;
+        _embedder = embedder;
 
         _hook.KeyReceived += (_, e) =>
         {
@@ -95,14 +99,26 @@ internal sealed class ExpansionHost : IDisposable
     public static ExpansionHost Start()
     {
         var regex = new RegexContextEngine();
+        var onnx = OnnxMiniLmEmbedder.TryCreate();
+        ITextEmbedder embedder = onnx is null ? NullTextEmbedder.Instance : onnx;
+        if (onnx is not null)
+        {
+            _ = Task.Run(onnx.Warmup);
+        }
+
+        var search = new HybridSearchEngine(
+            new KeywordSearchEngine(regex),
+            new SemanticSearchEngine(embedder));
+
         return new ExpansionHost(
             new StaticExpansionEngine(),
             regex,
-            new KeywordSearchEngine(regex),
+            search,
             new JsonSnippetStore(),
             new SharpHookKeyboardHookService(),
             new SharpHookTextInjector(),
-            CreateScraper());
+            CreateScraper(),
+            onnx);
     }
 
     public void Dispose()
@@ -114,6 +130,8 @@ internal sealed class ExpansionHost : IDisposable
         {
             disposable.Dispose();
         }
+
+        _embedder?.Dispose();
 
         Dispatcher.UIThread.Post(() => _overlay?.Close());
     }
