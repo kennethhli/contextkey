@@ -14,4 +14,8 @@ public sealed class WindowsWindowScraper : IWindowScraper
         y = 0;
         return false;
     }
+
+    public void ClearCache()
+    {
+    }
 }

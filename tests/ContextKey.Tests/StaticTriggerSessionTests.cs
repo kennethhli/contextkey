@@ -82,6 +82,19 @@ public sealed class StaticTriggerSessionTests
     }
 
     [Fact]
+    public void Clear_DropsPartialTrigger()
+    {
+        var session = CreateSession();
+        Type(session, "=em");
+        session.Clear();
+
+        Assert.Equal(string.Empty, session.Buffer);
+        Type(session, "=email");
+        var result = session.Handle(Space());
+        Assert.Equal("my.email@domain.com", result.Expansion);
+    }
+
+    [Fact]
     public void TypingWithoutPrefix_DoesNothing()
     {
         var session = CreateSession();

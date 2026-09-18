@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 
@@ -47,6 +48,24 @@ public static class MacFocus
         {
             Console.Error.WriteLine($"frontmost pid failed: {ex.Message}");
             return 0;
+        }
+    }
+
+    public static string? FrontmostProcessName()
+    {
+        var pid = FrontmostPid();
+        if (pid <= 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            return Process.GetProcessById(pid).ProcessName;
+        }
+        catch (Exception)
+        {
+            return null;
         }
     }
 

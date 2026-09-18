@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using ContextKey.Core;
 using ContextKey.Core.Engines;
 using ContextKey.Core.Models;
 using ReactiveUI;
@@ -44,14 +45,23 @@ public sealed class SnippetRow : ReactiveObject
 public sealed class SettingsViewModel : ReactiveObject
 {
     private readonly Action<IReadOnlyList<Snippet>> _persist;
+    private readonly Action<IReadOnlyList<string>> _persistExcluded;
     private SnippetRow? _selected;
     private string _status = "";
+    private string _excludedText = "";
 
-    public SettingsViewModel(IEnumerable<Snippet> snippets, Action<IReadOnlyList<Snippet>> persist)
+    public SettingsViewModel(
+        IEnumerable<Snippet> snippets,
+        Action<IReadOnlyList<Snippet>> persist,
+        IEnumerable<string> excludedApps,
+        Action<IReadOnlyList<string>> persistExcluded)
     {
         ArgumentNullException.ThrowIfNull(snippets);
         ArgumentNullException.ThrowIfNull(persist);
+        ArgumentNullException.ThrowIfNull(excludedApps);
+        ArgumentNullException.ThrowIfNull(persistExcluded);
         _persist = persist;
+        _persistExcluded = persistExcluded;
         Items = [];
         foreach (var snippet in snippets)
         {
@@ -59,6 +69,7 @@ public sealed class SettingsViewModel : ReactiveObject
         }
 
         Selected = Items.Count > 0 ? Items[0] : null;
+        ExcludedText = string.Join('\n', excludedApps);
     }
 
     public ObservableCollection<SnippetRow> Items { get; }
@@ -73,6 +84,12 @@ public sealed class SettingsViewModel : ReactiveObject
     {
         get => _status;
         private set => this.RaiseAndSetIfChanged(ref _status, value);
+    }
+
+    public string ExcludedText
+    {
+        get => _excludedText;
+        set => this.RaiseAndSetIfChanged(ref _excludedText, value);
     }
 
     public void NewSnippet()
@@ -112,6 +129,17 @@ public sealed class SettingsViewModel : ReactiveObject
         }
 
         Persist("saved");
+    }
+
+    public void SaveExcluded()
+    {
+        var names = AppExclusionList.Normalize(
+            ExcludedText.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries));
+        ExcludedText = string.Join('\n', names);
+        _persistExcluded(names);
+        Status = names.Length == 0
+            ? "no apps excluded — scrape will read everything"
+            : $"excluded {names.Length} app{(names.Length == 1 ? "" : "s")}";
     }
 
     public IReadOnlyList<Snippet> ToSnippets()

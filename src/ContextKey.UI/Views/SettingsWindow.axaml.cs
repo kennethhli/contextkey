@@ -18,4 +18,6 @@ public partial class SettingsWindow : Window
     private void OnDeleteClicked(object? sender, RoutedEventArgs e) => Vm?.DeleteSelected();
 
     private void OnSaveClicked(object? sender, RoutedEventArgs e) => Vm?.Save();
+
+    private void OnSaveExcludedClicked(object? sender, RoutedEventArgs e) => Vm?.SaveExcluded();
 }

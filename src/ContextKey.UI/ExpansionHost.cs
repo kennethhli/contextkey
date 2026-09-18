@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Threading;
+using ContextKey.Core;
 using ContextKey.Core.Engines;
 using ContextKey.Core.Interfaces;
 using ContextKey.Core.Models;
@@ -23,6 +24,8 @@ internal sealed class ExpansionHost : IDisposable
     private readonly RegexContextEngine _regex;
     private readonly ISearchEngine _search;
     private readonly ISnippetStore _store;
+    private readonly JsonExcludedAppStore _exclusionStore;
+    private readonly AppExclusionList _exclusions;
     private readonly IDisposable? _embedder;
     private readonly CancellationTokenSource _lifetime = new();
     private FloatingOverlayView? _overlay;
@@ -38,6 +41,8 @@ internal sealed class ExpansionHost : IDisposable
         IKeyboardHookService hook,
         ITextInjector injector,
         IWindowScraper scraper,
+        JsonExcludedAppStore exclusionStore,
+        AppExclusionList exclusions,
         IDisposable? embedder = null)
     {
         ArgumentNullException.ThrowIfNull(engine);
@@ -47,8 +52,11 @@ internal sealed class ExpansionHost : IDisposable
         ArgumentNullException.ThrowIfNull(hook);
         ArgumentNullException.ThrowIfNull(injector);
         ArgumentNullException.ThrowIfNull(scraper);
+        ArgumentNullException.ThrowIfNull(exclusionStore);
+        ArgumentNullException.ThrowIfNull(exclusions);
 
         engine.Load(store.Load());
+        exclusions.ReplaceUser(exclusionStore.Load());
 
         var session = new StaticTriggerSession(engine, regex);
         _engine = engine;
@@ -58,12 +66,20 @@ internal sealed class ExpansionHost : IDisposable
         _regex = regex;
         _search = search;
         _store = store;
+        _exclusionStore = exclusionStore;
+        _exclusions = exclusions;
         _embedder = embedder;
 
         _hook.KeyReceived += (_, e) =>
         {
             if (_overlayOpen || _settingsOpen)
             {
+                return;
+            }
+
+            if (_exclusions.ShouldPauseExpansion(FrontmostAppName()))
+            {
+                session.Clear();
                 return;
             }
 
@@ -115,6 +131,8 @@ internal sealed class ExpansionHost : IDisposable
             _ = Task.Run(onnx.Warmup);
         }
 
+        var exclusions = new AppExclusionList();
+        var exclusionStore = new JsonExcludedAppStore();
         var search = new HybridSearchEngine(
             new KeywordSearchEngine(regex),
             new SemanticSearchEngine(embedder));
@@ -126,7 +144,9 @@ internal sealed class ExpansionHost : IDisposable
             new JsonSnippetStore(),
             new SharpHookKeyboardHookService(),
             new SharpHookTextInjector(),
-            CreateScraper(),
+            CreateScraper(exclusions),
+            exclusionStore,
+            exclusions,
             onnx);
     }
 
@@ -161,7 +181,11 @@ internal sealed class ExpansionHost : IDisposable
 
             _settingsOpen = true;
             _overlay?.Close();
-            var vm = new SettingsViewModel(_engine.GetAll(), PersistSnippets);
+            var vm = new SettingsViewModel(
+                _engine.GetAll(),
+                PersistSnippets,
+                _exclusions.User,
+                PersistExcludedApps);
             var window = new SettingsWindow { DataContext = vm };
             _settings = window;
             window.Closed += (_, _) =>
@@ -185,6 +209,16 @@ internal sealed class ExpansionHost : IDisposable
         _store.Save(snippets);
         _engine.Load(snippets);
     }
+
+    private void PersistExcludedApps(IReadOnlyList<string> names)
+    {
+        _exclusionStore.Save(names);
+        _exclusions.ReplaceUser(names);
+        _scraper.ClearCache();
+    }
+
+    private static string? FrontmostAppName() =>
+        OperatingSystem.IsMacOS() ? MacFocus.FrontmostProcessName() : null;
 
     private void Replace(int eraseCount, string text)
     {
@@ -366,6 +400,6 @@ internal sealed class ExpansionHost : IDisposable
         Console.WriteLine("enable Terminal (and dotnet if it shows up), then quit and rerun");
     }
 
-    private static IWindowScraper CreateScraper() =>
-        OperatingSystem.IsMacOS() ? new MacWindowScraper() : new WindowsWindowScraper();
+    private static IWindowScraper CreateScraper(AppExclusionList exclusions) =>
+        OperatingSystem.IsMacOS() ? new MacWindowScraper(exclusions) : new WindowsWindowScraper();
 }

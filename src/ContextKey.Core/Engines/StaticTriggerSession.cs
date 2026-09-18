@@ -36,6 +36,8 @@ public sealed class StaticTriggerSession
 
     public string Buffer => _buffer.ToString();
 
+    public void Clear() => _buffer.Clear();
+
     public StaticTriggerResult Handle(Keystroke key)
     {
         if (key.Control || key.Alt || key.Meta)

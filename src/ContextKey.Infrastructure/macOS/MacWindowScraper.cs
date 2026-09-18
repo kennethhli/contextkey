@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
+using ContextKey.Core;
 using ContextKey.Core.Interfaces;
 using ContextKey.Core.Models;
 
@@ -16,16 +17,16 @@ public sealed class MacWindowScraper : IWindowScraper
     private const int BudgetMs = 280;
     private static readonly TimeSpan CacheTtl = TimeSpan.FromMilliseconds(1500);
 
-    private static readonly HashSet<string> SkipOwners = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "WindowServer", "Dock", "Control Center", "Notification Center",
-        "SystemUIServer", "Spotlight", "ContextKey"
-    };
-
+    private readonly AppExclusionList _exclusions;
     private readonly object _gate = new();
     private IReadOnlyList<ScrapedWindow> _cache = [];
     private long _cacheTicks;
     private Task<IReadOnlyList<ScrapedWindow>>? _inflight;
+
+    public MacWindowScraper(AppExclusionList? exclusions = null)
+    {
+        _exclusions = exclusions ?? new AppExclusionList();
+    }
 
     public static bool EnsureAccessibility(bool prompt = true) =>
         AxNative.EnsureAccessibility(prompt);
@@ -71,6 +72,15 @@ public sealed class MacWindowScraper : IWindowScraper
             }, cancellationToken);
 
             return _inflight;
+        }
+    }
+
+    public void ClearCache()
+    {
+        lock (_gate)
+        {
+            _cache = [];
+            _cacheTicks = 0;
         }
     }
 
@@ -171,7 +181,7 @@ public sealed class MacWindowScraper : IWindowScraper
     private bool IsFresh() =>
         Stopwatch.GetElapsedTime(_cacheTicks) < CacheTtl;
 
-    private static IReadOnlyList<ScrapedWindow> ScrapeCore(CancellationToken cancellationToken)
+    private IReadOnlyList<ScrapedWindow> ScrapeCore(CancellationToken cancellationToken)
     {
         if (!OperatingSystem.IsMacOS() || AxNative.AXIsProcessTrusted() == 0)
         {
@@ -191,7 +201,7 @@ public sealed class MacWindowScraper : IWindowScraper
                 break;
             }
 
-            if (pid == Environment.ProcessId || SkipOwners.Contains(processName))
+            if (pid == Environment.ProcessId || _exclusions.ShouldSkipScrape(processName))
             {
                 continue;
             }
