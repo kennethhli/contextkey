@@ -1,0 +1,55 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:ContextKey.UI.ViewModels"
+        x:Class="ContextKey.UI.Views.SettingsWindow"
+        x:DataType="vm:SettingsViewModel"
+        Title="Snippets"
+        Width="560"
+        Height="480"
+        MinWidth="440"
+        MinHeight="360"
+        WindowStartupLocation="CenterScreen"
+        Background="#F7F7F7">
+    <Grid RowDefinitions="*,Auto,Auto" Margin="14" RowSpacing="10">
+        <ListBox ItemsSource="{Binding Items}"
+                 SelectedItem="{Binding Selected, Mode=TwoWay}"
+                 ScrollViewer.VerticalScrollBarVisibility="Visible">
+            <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:SnippetRow">
+                    <TextBlock Text="{Binding Display}" Margin="0,3" />
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <Grid Grid.Row="1" ColumnDefinitions="92,*" RowDefinitions="Auto,Auto,*,Auto" RowSpacing="6" ColumnSpacing="8">
+            <TextBlock VerticalAlignment="Center" Text="trigger" />
+            <TextBox Grid.Column="1"
+                     Watermark="email"
+                     Text="{Binding Selected.Trigger, Mode=TwoWay}" />
+            <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="expands to" />
+            <TextBox Grid.Row="1"
+                     Grid.Column="1"
+                     Grid.RowSpan="2"
+                     MinHeight="88"
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"
+                     Watermark="the text that gets typed"
+                     Text="{Binding Selected.Expansion, Mode=TwoWay}" />
+            <TextBlock Grid.Row="3" VerticalAlignment="Center" Text="note" />
+            <TextBox Grid.Row="3"
+                     Grid.Column="1"
+                     Watermark="optional"
+                     Text="{Binding Selected.Description, Mode=TwoWay}" />
+        </Grid>
+
+        <Grid Grid.Row="2" ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="8">
+            <Button Content="New" Click="OnNewClicked" />
+            <Button Grid.Column="1" Content="Delete" Click="OnDeleteClicked" />
+            <TextBlock Grid.Column="2"
+                       VerticalAlignment="Center"
+                       Opacity="0.7"
+                       Text="{Binding Status}" />
+            <Button Grid.Column="3" Content="Save" Click="OnSaveClicked" />
+        </Grid>
+    </Grid>
+</Window>

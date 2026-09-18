@@ -33,6 +33,9 @@ public partial class App : Application
         base.OnFrameworkInitializationCompleted();
     }
 
+    private void OnSettingsClicked(object? sender, EventArgs e) =>
+        _host?.ShowSettings();
+
     private void OnQuitClicked(object? sender, EventArgs e)
     {
         _host?.Dispose();

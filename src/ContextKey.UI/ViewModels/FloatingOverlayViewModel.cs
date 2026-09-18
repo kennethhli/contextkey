@@ -47,8 +47,9 @@ public sealed class FloatingOverlayViewModel : ReactiveObject
 
     public void ReplaceWindows(IReadOnlyList<ScrapedWindow> windows)
     {
+        var keep = Selected?.Value;
         _windows = windows;
-        Refresh();
+        Refresh(keep);
     }
 
     public void MoveSelection(int delta)
@@ -68,14 +69,26 @@ public sealed class FloatingOverlayViewModel : ReactiveObject
         Selected = Results[index];
     }
 
-    public string? Confirm() => Selected?.Value;
+    public string? Confirm() => Selected?.Value ?? (Results.Count > 0 ? Results[0].Value : null);
 
-    private void Refresh()
+    private void Refresh(string? preferValue = null)
     {
         Results.Clear();
         foreach (var hit in _search.Search(_query, _snippets, _windows))
         {
             Results.Add(hit);
+        }
+
+        if (preferValue is not null)
+        {
+            foreach (var hit in Results)
+            {
+                if (string.Equals(hit.Value, preferValue, StringComparison.Ordinal))
+                {
+                    Selected = hit;
+                    return;
+                }
+            }
         }
 
         Selected = Results.Count > 0 ? Results[0] : null;

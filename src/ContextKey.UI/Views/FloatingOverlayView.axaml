@@ -6,25 +6,27 @@
         x:DataType="vm:FloatingOverlayViewModel"
         Title="ContextKey"
         Width="380"
-        MinHeight="120"
-        MaxHeight="340"
-        SizeToContent="Height"
-        SystemDecorations="None"
+        Height="320"
+        MinHeight="180"
         CanResize="False"
+        SystemDecorations="None"
         ShowInTaskbar="False"
         Topmost="True"
+        ShowActivated="True"
         WindowStartupLocation="Manual"
         Background="#F7F7F7">
     <Border BorderBrush="#DDDDDD" BorderThickness="1" Padding="8">
-        <StackPanel Spacing="6">
+        <Grid RowDefinitions="Auto,*" RowSpacing="6">
             <TextBox x:Name="QueryBox"
-                     Text="{Binding Query}"
                      Watermark="search snippets and windows"
-                     MinHeight="28" />
+                     MinHeight="28"
+                     Text="{Binding Query}" />
             <ListBox x:Name="ResultList"
+                     Grid.Row="1"
                      ItemsSource="{Binding Results}"
-                     SelectedItem="{Binding Selected}"
-                     MaxHeight="260">
+                     SelectedItem="{Binding Selected, Mode=TwoWay}"
+                     ScrollViewer.VerticalScrollBarVisibility="Visible"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                 <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="models:SearchResult">
                         <StackPanel Spacing="1" Margin="0,2">
@@ -37,6 +39,6 @@
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
-        </StackPanel>
+        </Grid>
     </Border>
 </Window>

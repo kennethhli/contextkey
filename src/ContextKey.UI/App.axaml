@@ -11,6 +11,8 @@
             <TrayIcon Icon="/Assets/tray.png" ToolTipText="ContextKey">
                 <TrayIcon.Menu>
                     <NativeMenu>
+                        <NativeMenuItem Header="Snippets…" Click="OnSettingsClicked" />
+                        <NativeMenuItemSeparator />
                         <NativeMenuItem Header="Quit" Click="OnQuitClicked" />
                     </NativeMenu>
                 </TrayIcon.Menu>

@@ -36,13 +36,17 @@ public sealed class JsonSnippetStoreTests
         try
         {
             var store = new JsonSnippetStore(path);
-            store.Save([new Snippet { Trigger = "sig", Expansion = "Alex" }]);
+            store.Save(
+            [
+                new Snippet { Trigger = "sig", Expansion = "Alex", Description = "sign-off" }
+            ]);
 
             var loaded = store.Load();
 
             Assert.Single(loaded);
             Assert.Equal("sig", loaded[0].Trigger);
             Assert.Equal("Alex", loaded[0].Expansion);
+            Assert.Equal("sign-off", loaded[0].Description);
         }
         finally
         {

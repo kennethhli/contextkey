@@ -13,7 +13,7 @@ public sealed class MacWindowScraper : IWindowScraper
     private const int MaxWindows = 12;
     private const int MaxNodes = 400;
     private const int MaxCharsPerWindow = 24_000;
-    private const int BudgetMs = 80;
+    private const int BudgetMs = 280;
     private static readonly TimeSpan CacheTtl = TimeSpan.FromMilliseconds(1500);
 
     private static readonly HashSet<string> SkipOwners = new(StringComparer.OrdinalIgnoreCase)
@@ -26,6 +26,9 @@ public sealed class MacWindowScraper : IWindowScraper
     private IReadOnlyList<ScrapedWindow> _cache = [];
     private long _cacheTicks;
     private Task<IReadOnlyList<ScrapedWindow>>? _inflight;
+
+    public static bool EnsureAccessibility(bool prompt = true) =>
+        AxNative.EnsureAccessibility(prompt);
 
     public Task<IReadOnlyList<ScrapedWindow>> ScrapeAsync(CancellationToken cancellationToken = default)
     {
@@ -43,12 +46,25 @@ public sealed class MacWindowScraper : IWindowScraper
 
             _inflight = Task.Run(() =>
             {
-                var result = ScrapeCore(cancellationToken);
-                lock (_gate)
+                IReadOnlyList<ScrapedWindow> result = [];
+                try
                 {
-                    _cache = result;
-                    _cacheTicks = Stopwatch.GetTimestamp();
-                    _inflight = null;
+                    using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                    timeout.CancelAfter(TimeSpan.FromMilliseconds(BudgetMs + 120));
+                    result = ScrapeCore(timeout.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    result = [];
+                }
+                finally
+                {
+                    lock (_gate)
+                    {
+                        _cache = result;
+                        _cacheTicks = Stopwatch.GetTimestamp();
+                        _inflight = null;
+                    }
                 }
 
                 return result;
@@ -105,10 +121,9 @@ public sealed class MacWindowScraper : IWindowScraper
                             return false;
                         }
 
-                        // AX is quartz coords (origin bottom-left)
-                        var display = AxNative.CGDisplayBounds(AxNative.CGMainDisplayID());
+                        // AX screen coords are top-left of the main display
                         x = (int)Math.Round(rect.X);
-                        y = (int)Math.Round(display.Height - rect.Y);
+                        y = (int)Math.Round(rect.Y + rect.Height);
                         return true;
                     }
                     finally
@@ -160,6 +175,7 @@ public sealed class MacWindowScraper : IWindowScraper
     {
         if (!OperatingSystem.IsMacOS() || AxNative.AXIsProcessTrusted() == 0)
         {
+            Console.WriteLine("scrape skipped: accessibility not granted for this process");
             return [];
         }
 

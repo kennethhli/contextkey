@@ -16,6 +16,9 @@ internal static class AxNative
     public const string CoreGraphics =
         "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics";
 
+    public const string HiServices =
+        "/System/Library/Frameworks/ApplicationServices.framework/Frameworks/HIServices.framework/HIServices";
+
     public const uint Utf8 = 0x08000100;
     public const int AxSuccess = 0;
     public const int CfNumberIntType = 9;
@@ -45,6 +48,19 @@ internal static class AxNative
 
     [DllImport(ApplicationServices)]
     public static extern byte AXIsProcessTrusted();
+
+    [DllImport(ApplicationServices)]
+    public static extern byte AXIsProcessTrustedWithOptions(IntPtr options);
+
+    [DllImport(CoreFoundation)]
+    public static extern IntPtr CFDictionaryCreateMutable(
+        IntPtr allocator,
+        nint capacity,
+        IntPtr keyCallBacks,
+        IntPtr valueCallBacks);
+
+    [DllImport(CoreFoundation)]
+    public static extern void CFDictionarySetValue(IntPtr theDict, IntPtr key, IntPtr value);
 
     [DllImport(CoreGraphics)]
     public static extern IntPtr CGWindowListCopyWindowInfo(uint option, uint relativeToWindow);
@@ -134,6 +150,66 @@ internal static class AxNative
         {
             CFRelease(cf);
         }
+    }
+
+    public static bool EnsureAccessibility(bool prompt)
+    {
+        try
+        {
+            if (AXIsProcessTrusted() != 0)
+            {
+                return true;
+            }
+
+            if (!prompt)
+            {
+                return false;
+            }
+
+            var key = ReadExportedPointer(ApplicationServices, "kAXTrustedCheckOptionPrompt");
+            if (key == IntPtr.Zero)
+            {
+                key = ReadExportedPointer(HiServices, "kAXTrustedCheckOptionPrompt");
+            }
+
+            var truth = ReadExportedPointer(CoreFoundation, "kCFBooleanTrue");
+            if (key == IntPtr.Zero || truth == IntPtr.Zero)
+            {
+                return false;
+            }
+
+            var dict = CFDictionaryCreateMutable(IntPtr.Zero, 1, IntPtr.Zero, IntPtr.Zero);
+            if (dict == IntPtr.Zero)
+            {
+                return false;
+            }
+
+            try
+            {
+                CFDictionarySetValue(dict, key, truth);
+                return AXIsProcessTrustedWithOptions(dict) != 0;
+            }
+            finally
+            {
+                Release(dict);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"accessibility check failed: {ex.Message}");
+            return AXIsProcessTrusted() != 0;
+        }
+    }
+
+    private static IntPtr ReadExportedPointer(string library, string symbol)
+    {
+        if (!NativeLibrary.TryLoad(library, out var handle) ||
+            !NativeLibrary.TryGetExport(handle, symbol, out var address))
+        {
+            return IntPtr.Zero;
+        }
+
+        return Marshal.ReadIntPtr(address);
     }
 }
 

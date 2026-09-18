@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Threading;
 using ContextKey.Core.Engines;
 using ContextKey.Core.Interfaces;
@@ -21,10 +22,13 @@ internal sealed class ExpansionHost : IDisposable
     private readonly IWindowScraper _scraper;
     private readonly RegexContextEngine _regex;
     private readonly ISearchEngine _search;
+    private readonly ISnippetStore _store;
     private readonly IDisposable? _embedder;
     private readonly CancellationTokenSource _lifetime = new();
     private FloatingOverlayView? _overlay;
+    private SettingsWindow? _settings;
     private bool _overlayOpen;
+    private bool _settingsOpen;
 
     public ExpansionHost(
         StaticExpansionEngine engine,
@@ -53,11 +57,12 @@ internal sealed class ExpansionHost : IDisposable
         _scraper = scraper;
         _regex = regex;
         _search = search;
+        _store = store;
         _embedder = embedder;
 
         _hook.KeyReceived += (_, e) =>
         {
-            if (_overlayOpen)
+            if (_overlayOpen || _settingsOpen)
             {
                 return;
             }
@@ -80,16 +85,15 @@ internal sealed class ExpansionHost : IDisposable
             {
                 var key = result.DynamicKey;
                 Replace(result.EraseCount, string.Empty);
-                _ = ExpandDynamicAsync(key);
+                _ = ExpandDynamicAsync(key, $";{key}");
                 return;
             }
 
             if (result.ShouldOpenOverlay)
             {
                 var hasCaret = _scraper.TryGetCaretScreenPosition(out var x, out var y);
-                Replace(result.EraseCount, string.Empty);
                 _overlayOpen = true;
-                _ = ShowOverlayAsync(result.OverlayQuery, x, y, hasCaret);
+                _ = ShowOverlayAsync(result.OverlayQuery, result.EraseCount, x, y, hasCaret);
             }
         };
 
@@ -98,6 +102,11 @@ internal sealed class ExpansionHost : IDisposable
 
     public static ExpansionHost Start()
     {
+        if (OperatingSystem.IsMacOS())
+        {
+            PromptMacAccessibility();
+        }
+
         var regex = new RegexContextEngine();
         var onnx = OnnxMiniLmEmbedder.TryCreate();
         ITextEmbedder embedder = onnx is null ? NullTextEmbedder.Instance : onnx;
@@ -133,7 +142,48 @@ internal sealed class ExpansionHost : IDisposable
 
         _embedder?.Dispose();
 
-        Dispatcher.UIThread.Post(() => _overlay?.Close());
+        Dispatcher.UIThread.Post(() =>
+        {
+            _overlay?.Close();
+            _settings?.Close();
+        });
+    }
+
+    public void ShowSettings()
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_settings is { IsVisible: true })
+            {
+                _settings.Activate();
+                return;
+            }
+
+            _settingsOpen = true;
+            _overlay?.Close();
+            var vm = new SettingsViewModel(_engine.GetAll(), PersistSnippets);
+            var window = new SettingsWindow { DataContext = vm };
+            _settings = window;
+            window.Closed += (_, _) =>
+            {
+                _settingsOpen = false;
+                _settings = null;
+            };
+
+            if (OperatingSystem.IsMacOS())
+            {
+                MacFocus.ActivateThisApp();
+            }
+
+            window.Show();
+            window.Activate();
+        });
+    }
+
+    private void PersistSnippets(IReadOnlyList<Snippet> snippets)
+    {
+        _store.Save(snippets);
+        _engine.Load(snippets);
     }
 
     private void Replace(int eraseCount, string text)
@@ -145,15 +195,20 @@ internal sealed class ExpansionHost : IDisposable
         }
     }
 
-    private async Task ExpandDynamicAsync(string key)
+    private async Task ExpandDynamicAsync(string key, string restore)
     {
         try
         {
-            var windows = await _scraper.ScrapeAsync(_lifetime.Token).ConfigureAwait(false);
-            if (_regex.TryExtract(key, windows, out var value))
+            var windows = await ScrapeWithTimeout().ConfigureAwait(false);
+            if (!_regex.TryExtract(key, windows, out var value))
             {
-                await _injector.InjectAsync(value).ConfigureAwait(false);
+                Console.WriteLine($";{key}: nothing found in other windows");
+                await _injector.InjectAsync(restore, _lifetime.Token).ConfigureAwait(false);
+                return;
             }
+
+            await _injector.InjectAsync(value, _lifetime.Token).ConfigureAwait(false);
+            Console.WriteLine($";{key} → {value}");
         }
         catch (OperationCanceledException)
         {
@@ -165,26 +220,56 @@ internal sealed class ExpansionHost : IDisposable
         }
     }
 
-    private async Task ShowOverlayAsync(string query, int x, int y, bool hasCaret)
+    private async Task ShowOverlayAsync(string query, int eraseCount, int x, int y, bool hasCaret)
     {
+        var shown = false;
         try
         {
-            var windows = await _scraper.ScrapeAsync(_lifetime.Token).ConfigureAwait(false);
-            await Dispatcher.UIThread.InvokeAsync(() => ShowOverlay(query, windows, x, y, hasCaret));
+            await Dispatcher.UIThread.InvokeAsync(() => ShowOverlay(query, eraseCount, [], x, y, hasCaret));
+            shown = true;
+
+            var windows = await ScrapeWithTimeout().ConfigureAwait(false);
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (_overlay?.DataContext is FloatingOverlayViewModel vm)
+                {
+                    vm.ReplaceWindows(windows);
+                }
+            });
         }
         catch (OperationCanceledException)
         {
-            _overlayOpen = false;
+            if (!shown)
+            {
+                _overlayOpen = false;
+            }
         }
         catch (Exception ex)
         {
-            _overlayOpen = false;
             Console.Error.WriteLine($"overlay failed: {ex.Message}");
+            if (!shown)
+            {
+                _overlayOpen = false;
+            }
         }
+    }
+
+    private async Task<IReadOnlyList<ScrapedWindow>> ScrapeWithTimeout()
+    {
+        var scrape = _scraper.ScrapeAsync(_lifetime.Token);
+        var winner = await Task.WhenAny(scrape, Task.Delay(600, _lifetime.Token)).ConfigureAwait(false);
+        if (winner != scrape)
+        {
+            Console.WriteLine("scrape: timed out");
+            return [];
+        }
+
+        return await scrape.ConfigureAwait(false);
     }
 
     private void ShowOverlay(
         string query,
+        int eraseCount,
         IReadOnlyList<ScrapedWindow> windows,
         int x,
         int y,
@@ -193,10 +278,12 @@ internal sealed class ExpansionHost : IDisposable
         var vm = new FloatingOverlayViewModel(_search, _engine.GetAll(), windows, query);
         var window = new FloatingOverlayView { DataContext = vm };
         _overlay = window;
+        window.EraseCount = eraseCount;
 
-        if (hasCaret)
+        if (OperatingSystem.IsMacOS())
         {
-            window.Position = new PixelPoint(x, Math.Max(0, y + 2));
+            window.RestorePid = MacFocus.FrontmostPid();
+            MacFocus.ActivateThisApp();
         }
 
         window.Closed += async (_, _) =>
@@ -204,6 +291,8 @@ internal sealed class ExpansionHost : IDisposable
             _overlayOpen = false;
             _overlay = null;
             var value = window.ChosenValue;
+            var restorePid = window.RestorePid;
+            var eraseCount = window.EraseCount;
             if (string.IsNullOrEmpty(value))
             {
                 return;
@@ -211,26 +300,70 @@ internal sealed class ExpansionHost : IDisposable
 
             try
             {
-                await Task.Delay(40, _lifetime.Token);
+                if (OperatingSystem.IsMacOS())
+                {
+                    MacFocus.ActivatePid(restorePid);
+                }
+
+                await Task.Delay(180, _lifetime.Token);
+                await _injector.EraseAsync(eraseCount, _lifetime.Token);
                 await _injector.InjectAsync(value, _lifetime.Token);
+                Console.WriteLine($"overlay insert: {value}");
             }
             catch (OperationCanceledException)
             {
                 // shutting down
             }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"overlay insert failed: {ex.Message}");
+            }
         };
 
         window.Show();
-        if (!hasCaret)
+        window.Position = ClampToScreen(window, hasCaret
+            ? new PixelPoint(x, y + 2)
+            : FallbackPosition(window));
+        window.Activate();
+        Console.WriteLine($"overlay: {window.Position.X},{window.Position.Y}");
+    }
+
+    private static PixelPoint FallbackPosition(Window window)
+    {
+        var area = window.Screens.Primary?.WorkingArea;
+        return area is { } bounds
+            ? new PixelPoint(bounds.X + 72, bounds.Y + 72)
+            : new PixelPoint(72, 72);
+    }
+
+    private static PixelPoint ClampToScreen(Window window, PixelPoint desired)
+    {
+        var screen = window.Screens.ScreenFromPoint(desired) ?? window.Screens.Primary;
+        if (screen is null)
         {
-            var area = window.Screens.Primary?.WorkingArea;
-            if (area is { } bounds)
-            {
-                window.Position = new PixelPoint(bounds.X + 72, bounds.Y + 72);
-            }
+            return desired;
         }
 
-        window.Activate();
+        var area = screen.WorkingArea;
+        var maxX = Math.Max(area.X + 8, area.X + area.Width - 400);
+        var maxY = Math.Max(area.Y + 8, area.Y + area.Height - 180);
+        return new PixelPoint(
+            Math.Clamp(desired.X, area.X + 8, maxX),
+            Math.Clamp(desired.Y, area.Y + 8, maxY));
+    }
+
+    [System.Runtime.Versioning.SupportedOSPlatform("macos")]
+    private static void PromptMacAccessibility()
+    {
+        if (MacWindowScraper.EnsureAccessibility())
+        {
+            Console.WriteLine("accessibility: ok");
+            return;
+        }
+
+        Console.WriteLine(
+            "accessibility: missing — System Settings → Privacy & Security → Accessibility");
+        Console.WriteLine("enable Terminal (and dotnet if it shows up), then quit and rerun");
     }
 
     private static IWindowScraper CreateScraper() =>
