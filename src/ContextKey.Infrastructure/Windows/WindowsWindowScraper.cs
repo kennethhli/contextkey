@@ -15,6 +15,8 @@ public sealed class WindowsWindowScraper : IWindowScraper
         return false;
     }
 
+    public bool IsSecureFocus() => false;
+
     public void ClearCache()
     {
     }

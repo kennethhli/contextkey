@@ -21,6 +21,8 @@ public sealed class MacWindowScraper : IWindowScraper
     private readonly object _gate = new();
     private IReadOnlyList<ScrapedWindow> _cache = [];
     private long _cacheTicks;
+    private long _secureTicks;
+    private bool _secureCached;
     private Task<IReadOnlyList<ScrapedWindow>>? _inflight;
 
     public MacWindowScraper(AppExclusionList? exclusions = null)
@@ -84,6 +86,31 @@ public sealed class MacWindowScraper : IWindowScraper
         }
     }
 
+    public bool IsSecureFocus()
+    {
+        if (SecureEventInputOn())
+        {
+            return true;
+        }
+
+        lock (_gate)
+        {
+            if (_secureTicks != 0 && Stopwatch.GetElapsedTime(_secureTicks) < TimeSpan.FromMilliseconds(160))
+            {
+                return _secureCached;
+            }
+        }
+
+        var secure = ReadFocusedSecure();
+        lock (_gate)
+        {
+            _secureCached = secure;
+            _secureTicks = Stopwatch.GetTimestamp();
+        }
+
+        return secure;
+    }
+
     public bool TryGetCaretScreenPosition(out int x, out int y)
     {
         x = 0;
@@ -145,6 +172,61 @@ public sealed class MacWindowScraper : IWindowScraper
                 {
                     AxNative.Release(rangeValue);
                 }
+            }
+            finally
+            {
+                AxNative.Release(focused);
+            }
+        }
+        finally
+        {
+            AxNative.Release(systemWide);
+        }
+    }
+
+    private static bool SecureEventInputOn()
+    {
+        try
+        {
+            return AxNative.IsSecureEventInputEnabled() != 0;
+        }
+        catch (DllNotFoundException)
+        {
+            return false;
+        }
+        catch (EntryPointNotFoundException)
+        {
+            return false;
+        }
+    }
+
+    private static bool ReadFocusedSecure()
+    {
+        if (!OperatingSystem.IsMacOS() || AxNative.AXIsProcessTrusted() == 0)
+        {
+            return false;
+        }
+
+        var systemWide = AxNative.AXUIElementCreateSystemWide();
+        if (systemWide == IntPtr.Zero)
+        {
+            return false;
+        }
+
+        try
+        {
+            if (AxNative.AXUIElementCopyAttributeValue(systemWide, AxNative.AxFocusedUiElement, out var focused) != AxNative.AxSuccess
+                || focused == IntPtr.Zero)
+            {
+                return false;
+            }
+
+            try
+            {
+                var role = CopyString(focused, AxNative.AxRole);
+                var subrole = CopyString(focused, AxNative.AxSubrole);
+                var description = CopyString(focused, AxNative.AxDescription);
+                return SecureField.IsSecure(role, subrole, description);
             }
             finally
             {

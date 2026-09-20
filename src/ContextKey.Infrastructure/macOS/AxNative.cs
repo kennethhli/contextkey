@@ -19,6 +19,9 @@ internal static class AxNative
     public const string HiServices =
         "/System/Library/Frameworks/ApplicationServices.framework/Frameworks/HIServices.framework/HIServices";
 
+    public const string HiToolbox =
+        "/System/Library/Frameworks/Carbon.framework/Frameworks/HIToolbox.framework/HIToolbox";
+
     public const uint Utf8 = 0x08000100;
     public const int AxSuccess = 0;
     public const int CfNumberIntType = 9;
@@ -48,6 +51,9 @@ internal static class AxNative
 
     [DllImport(ApplicationServices)]
     public static extern byte AXIsProcessTrusted();
+
+    [DllImport(HiToolbox)]
+    public static extern byte IsSecureEventInputEnabled();
 
     [DllImport(ApplicationServices)]
     public static extern byte AXIsProcessTrustedWithOptions(IntPtr options);
@@ -106,6 +112,8 @@ internal static class AxNative
     public static readonly IntPtr AxValue = CfString("AXValue");
     public static readonly IntPtr AxTitle = CfString("AXTitle");
     public static readonly IntPtr AxDescription = CfString("AXDescription");
+    public static readonly IntPtr AxRole = CfString("AXRole");
+    public static readonly IntPtr AxSubrole = CfString("AXSubrole");
     public static readonly IntPtr AxFocusedUiElement = CfString("AXFocusedUIElement");
     public static readonly IntPtr AxSelectedTextRange = CfString("AXSelectedTextRange");
     public static readonly IntPtr AxBoundsForRange = CfString("AXBoundsForRange");

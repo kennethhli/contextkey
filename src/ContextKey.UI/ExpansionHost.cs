@@ -77,7 +77,7 @@ internal sealed class ExpansionHost : IDisposable
                 return;
             }
 
-            if (_exclusions.ShouldPauseExpansion(FrontmostAppName()))
+            if (_exclusions.ShouldPauseExpansion(FrontmostAppName()) || _scraper.IsSecureFocus())
             {
                 session.Clear();
                 return;
