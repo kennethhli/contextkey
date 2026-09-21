@@ -73,6 +73,9 @@ public sealed class HybridSearchEngine : ISearchEngine
             .ToArray();
     }
 
+    public void Prefetch(IEnumerable<Snippet> snippets, IReadOnlyList<ScrapedWindow> windows) =>
+        _semantic.Prefetch(snippets, windows);
+
     private static SearchResult Clone(SearchResult hit, double score) =>
         new()
         {

@@ -84,6 +84,34 @@ public sealed class SemanticSearchEngine
             .ToArray();
     }
 
+    public void Prefetch(IEnumerable<Snippet> snippets, IReadOnlyList<ScrapedWindow> windows)
+    {
+        ArgumentNullException.ThrowIfNull(snippets);
+        ArgumentNullException.ThrowIfNull(windows);
+        if (!_embedder.IsAvailable)
+        {
+            return;
+        }
+
+        foreach (var snippet in snippets)
+        {
+            var text = SnippetText(snippet);
+            if (text.Length > 0)
+            {
+                EmbedCached(text);
+            }
+        }
+
+        foreach (var window in windows)
+        {
+            var text = WindowText(window);
+            if (text.Length > 0)
+            {
+                EmbedCached(text);
+            }
+        }
+    }
+
     private float[] EmbedCached(string text) =>
         _cache.GetOrAdd(text, static (t, embedder) => embedder.Embed(t), _embedder);
 

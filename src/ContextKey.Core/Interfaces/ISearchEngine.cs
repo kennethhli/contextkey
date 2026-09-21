@@ -9,4 +9,8 @@ public interface ISearchEngine
         IEnumerable<Snippet> snippets,
         IReadOnlyList<ScrapedWindow> windows,
         int limit = 8);
+
+    void Prefetch(IEnumerable<Snippet> snippets, IReadOnlyList<ScrapedWindow> windows)
+    {
+    }
 }

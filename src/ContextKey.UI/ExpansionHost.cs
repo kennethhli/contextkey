@@ -32,6 +32,7 @@ internal sealed class ExpansionHost : IDisposable
     private SettingsWindow? _settings;
     private bool _overlayOpen;
     private bool _settingsOpen;
+    private int _prefetching;
 
     public ExpansionHost(
         StaticExpansionEngine engine,
@@ -88,7 +89,7 @@ internal sealed class ExpansionHost : IDisposable
 
             if (session.Buffer.StartsWith(';'))
             {
-                _ = _scraper.ScrapeAsync(_lifetime.Token);
+                _ = PrefetchContextAsync();
             }
 
             if (result.ShouldExpand && result.Expansion is not null)
@@ -114,6 +115,7 @@ internal sealed class ExpansionHost : IDisposable
         };
 
         _hook.Start();
+        _ = Task.Run(() => _search.Prefetch(_engine.GetAll(), []), _lifetime.Token);
     }
 
     public static ExpansionHost Start()
@@ -208,6 +210,7 @@ internal sealed class ExpansionHost : IDisposable
     {
         _store.Save(snippets);
         _engine.Load(snippets);
+        _ = Task.Run(() => _search.Prefetch(snippets, []), _lifetime.Token);
     }
 
     private void PersistExcludedApps(IReadOnlyList<string> names)
@@ -254,6 +257,32 @@ internal sealed class ExpansionHost : IDisposable
         }
     }
 
+    private async Task PrefetchContextAsync()
+    {
+        if (Interlocked.Exchange(ref _prefetching, 1) == 1)
+        {
+            return;
+        }
+
+        try
+        {
+            var windows = await ScrapeWithTimeout().ConfigureAwait(false);
+            _search.Prefetch(_engine.GetAll(), windows);
+        }
+        catch (OperationCanceledException)
+        {
+            // shutting down
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"prefetch failed: {ex.Message}");
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _prefetching, 0);
+        }
+    }
+
     private async Task ShowOverlayAsync(string query, int eraseCount, int x, int y, bool hasCaret)
     {
         var shown = false;
@@ -263,6 +292,7 @@ internal sealed class ExpansionHost : IDisposable
             shown = true;
 
             var windows = await ScrapeWithTimeout().ConfigureAwait(false);
+            _ = Task.Run(() => _search.Prefetch(_engine.GetAll(), windows), _lifetime.Token);
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 if (_overlay?.DataContext is FloatingOverlayViewModel vm)
