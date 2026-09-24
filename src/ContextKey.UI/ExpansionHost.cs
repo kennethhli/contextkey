@@ -140,7 +140,7 @@ internal sealed class ExpansionHost : IDisposable
             new SemanticSearchEngine(embedder));
 
         return new ExpansionHost(
-            new StaticExpansionEngine(),
+            new StaticExpansionEngine(StringComparer.OrdinalIgnoreCase, new NativeClipboardText()),
             regex,
             search,
             new JsonSnippetStore(),

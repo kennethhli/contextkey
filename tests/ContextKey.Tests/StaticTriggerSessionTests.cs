@@ -31,6 +31,26 @@ public sealed class StaticTriggerSessionTests
     }
 
     [Fact]
+    public void EqualsDateThenSpace_ExpandsToday()
+    {
+        var engine = new StaticExpansionEngine(
+            StringComparer.OrdinalIgnoreCase,
+            clock: () => new DateTime(2026, 9, 23));
+        engine.Load(
+        [
+            new Snippet { Trigger = "email", Expansion = "my.email@domain.com" }
+        ]);
+        var session = new StaticTriggerSession(engine);
+        Type(session, "=date");
+
+        var result = session.Handle(Space());
+
+        Assert.True(result.ShouldExpand);
+        Assert.Equal("September 23, 2026", result.Expansion);
+        Assert.Equal(5, result.EraseCount);
+    }
+
+    [Fact]
     public void EqualsBrThenEnter_Expands()
     {
         var session = CreateSession();

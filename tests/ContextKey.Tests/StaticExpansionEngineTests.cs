@@ -110,7 +110,60 @@ public sealed class StaticExpansionEngineTests
 
         var triggers = engine.GetAll().Select(s => s.Trigger).ToArray();
 
-        Assert.Equal(["br", "email", "zzz"], triggers);
+        Assert.Equal(["br", "date", "email", "zzz"], triggers);
+    }
+
+    [Fact]
+    public void TryExpand_Date_UsesClock()
+    {
+        var engine = new StaticExpansionEngine(
+            StringComparer.OrdinalIgnoreCase,
+            clock: () => new DateTime(2026, 9, 23));
+
+        Assert.True(engine.TryExpand("=date", out var expansion));
+        Assert.Equal("September 23, 2026", expansion);
+    }
+
+    [Fact]
+    public void TryExpand_Clip_InsertsClipboard()
+    {
+        var engine = new StaticExpansionEngine(
+            StringComparer.OrdinalIgnoreCase,
+            clipboard: new FakeClipboard("hello from clip"));
+
+        Assert.True(engine.TryExpand("clip", out var expansion));
+        Assert.Equal("hello from clip", expansion);
+    }
+
+    [Fact]
+    public void TryExpand_EmptyClipboard_DoesNotExpand()
+    {
+        var engine = new StaticExpansionEngine(
+            StringComparer.OrdinalIgnoreCase,
+            clipboard: new FakeClipboard(""));
+
+        Assert.False(engine.TryExpand("=clip", out _));
+    }
+
+    [Fact]
+    public void TryExpand_Date_WinsOverStoredSnippet()
+    {
+        var engine = new StaticExpansionEngine(
+            StringComparer.OrdinalIgnoreCase,
+            clock: () => new DateTime(2026, 1, 2));
+        engine.Load([new Snippet { Trigger = "date", Expansion = "not today" }]);
+
+        Assert.True(engine.TryExpand("date", out var expansion));
+        Assert.Equal("January 2, 2026", expansion);
+    }
+
+    private sealed class FakeClipboard : ContextKey.Core.Interfaces.IClipboardText
+    {
+        private readonly string? _text;
+
+        public FakeClipboard(string? text) => _text = text;
+
+        public string? TryGetText() => _text;
     }
 
     [Fact]

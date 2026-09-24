@@ -185,6 +185,12 @@ public sealed class SettingsViewModel : ReactiveObject
             return false;
         }
 
+        if (StaticExpansionEngine.IsBuiltIn(trigger))
+        {
+            error = "date and clip are built in — type =date or =clip";
+            return false;
+        }
+
         foreach (var ch in trigger)
         {
             if (!char.IsLetterOrDigit(ch) && ch is not '_' and not '-')
